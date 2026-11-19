@@ -1,0 +1,17 @@
+dt,fichiers,lignes,octets,table,risk_level
+2026-11-18,113,206924,9376449,bronze/transactions,
+2026-11-18,66,74,204407,bronze/transactions_quarantine,
+2026-11-18,22,7770,375494,silver/account_metrics,
+2026-11-18,1,92,5939,silver/traffic_windows,
+2026-11-18,26,33,202437,gold/fraud_alerts,CRITICAL
+2026-11-18,98,125,732780,gold/fraud_alerts,HIGH
+2026-11-18,15,19,96621,gold/fraud_alerts,LOW
+2026-11-18,16,24,94968,gold/fraud_alerts,MEDIUM
+2026-11-18,26,253,39113,gold/anomaly_subgraph_vertices,CRITICAL
+2026-11-18,98,574,141168,gold/anomaly_subgraph_vertices,HIGH
+2026-11-18,15,57,21313,gold/anomaly_subgraph_vertices,LOW
+2026-11-18,16,102,23424,gold/anomaly_subgraph_vertices,MEDIUM
+2026-11-18,26,268,72036,gold/anomaly_subgraph_edges,CRITICAL
+2026-11-18,98,587,253494,gold/anomaly_subgraph_edges,HIGH
+2026-11-18,15,57,37216,gold/anomaly_subgraph_edges,LOW
+2026-11-18,15,94,39097,gold/anomaly_subgraph_edges,MEDIUM

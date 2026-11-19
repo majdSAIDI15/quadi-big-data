@@ -1,0 +1,64 @@
+% ============================================================
+% CONCLUSION GÉNÉRALE
+% ============================================================
+\chapter*{Conclusion générale}
+\phantomsection\addcontentsline{toc}{chapter}{Conclusion générale}
+\markboth{Conclusion générale}{Conclusion générale}
+
+Le Mini-Projet~17 demandait de détecter, sur un flux de virements, des
+fraudes qui n'existent qu'à l'échelle du réseau. La plateforme livrée le fait
+de bout en bout : un producteur réaliste publie virements et fraudes dans
+Kafka ; un job Spark Structured Streaming maintient un graphe glissant de
+10~minutes et l'analyse à deux vitesses avec GraphFrames ; chaque alerte part
+dans Kafka avec une explication en français et rejoint, avec son sous-graphe,
+un lakehouse Delta partitionné par niveau de risque et par date ; un tableau
+de bord Streamlit/PyVis permet de l'investiguer.
+
+Les résultats sont mesurés, pas illustrés : contre la vérité terrain publiée
+par le générateur, 99,0\,\% des alertes significatives sont fondées,
+92,9\,\% des fraudes sont détectées, un carrousel est signalé en
+3,9~secondes en médiane, et un arrêt brutal de Spark ne laisse aucun doublon
+dans le lakehouse. L'étude d'ablation montre que chaque filtre de la
+détection a un effet propre, et l'historique des runs montre d'où viennent
+ces chiffres.
+
+Le résultat le plus instructif est sans doute le chemin parcouru en
+performance : de 97 à 3,4~secondes par micro-batch, non par un réglage
+miracle mais par une suite de mesures, dont une a conduit à annuler une
+optimisation. La leçon dépasse ce projet : en analyse de graphe en flux, la
+question n'est pas tant de savoir exécuter un algorithme que de savoir
+\emph{ne pas} l'exécuter sur ce qui n'a pas changé.
+
+La plateforme reste un prototype --- données synthétiques, un seul nœud,
+latence de quelques secondes --- mais un prototype dont chaque limite est
+mesurée et chaque piste d'amélioration identifiée. Elle montre qu'une
+détection de structures de blanchiment explicable, auditable et proche du
+temps réel est à la portée d'une pile entièrement open source.
+
+% ============================================================
+% WEBOGRAPHIE
+% ============================================================
+\begin{thebibliography}{99}
+\phantomsection\addcontentsline{toc}{chapter}{Webographie}
+\small
+\bibitem{ibmaml} E.~Altman \emph{et al.}, \emph{Realistic Synthetic Financial Transactions for
+Anti-Money Laundering Models}, NeurIPS 2023 (Datasets and Benchmarks).
+\url{https://arxiv.org/abs/2306.16424}
+\bibitem{anrf} Autorité Nationale du Renseignement Financier (Maroc). \url{https://www.anrf.gov.ma}
+\bibitem{gafi} GAFI / FATF --- \emph{Jurisdictions under Increased Monitoring}.
+\url{https://www.fatf-gafi.org}
+\bibitem{spark} Apache Spark --- \emph{Structured Streaming Programming Guide} (3.5).
+\url{https://spark.apache.org/docs/3.5.7/structured-streaming-programming-guide.html}
+\bibitem{graphframes} GraphFrames --- graphes sur DataFrames Spark.
+\url{https://github.com/graphframes/graphframes}
+\bibitem{delta} Delta Lake --- documentation. \url{https://docs.delta.io}
+\bibitem{deltars} delta-rs --- Delta Lake sans JVM (Rust, Python).
+\url{https://delta-io.github.io/delta-rs/}
+\bibitem{kafka} Apache Kafka --- documentation. \url{https://kafka.apache.org/documentation/}
+\bibitem{streamlit} Streamlit --- documentation. \url{https://docs.streamlit.io}
+\bibitem{pyvis} PyVis --- visualisation interactive de graphes. \url{https://pyvis.readthedocs.io}
+\bibitem{pagerank} L.~Page, S.~Brin, R.~Motwani, T.~Winograd, \emph{The PageRank Citation Ranking:
+Bringing Order to the Web}, Stanford InfoLab, 1999.
+\bibitem{credits} Crédits graphiques : icônes Font Awesome Free 5 (licence CC BY 4.0,
+\url{https://fontawesome.com}) ; logos des outils : Wikimedia Commons.
+\end{thebibliography}

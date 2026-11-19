@@ -1,0 +1,115 @@
+% ============================================================
+% ANNEXES
+% ============================================================
+\appendix
+\chapter{Installation et commandes}
+\label{ann:installation}
+
+La plateforme ne demande que Docker Desktop (au moins 6~Go de mémoire
+accordés) : Java~17, Spark et les jars Kafka, Delta et GraphFrames sont dans
+l'image. Le script \fichier{scripts/demo.ps1} regroupe les commandes de la
+démonstration (tableau~\ref{tab:commandes}).
+
+\begin{lstlisting}[language=bash]
+docker compose up -d --build        # Kafka, topics, Spark, producteur, dashboard
+# Dashboard : http://localhost:8501   Spark UI : http://localhost:4040
+docker compose --profile tools up -d kafka-ui   # optionnel : http://localhost:8080
+docker compose down -v              # arrêt et remise à zéro des données
+\end{lstlisting}
+
+\begin{table}[htp]
+\centering\footnotesize
+\begin{tabular}{@{}>{\ttfamily}p{6.4cm}>{\raggedright\arraybackslash}p{7.8cm}@{}}
+\toprule
+\multicolumn{1}{@{}l}{\sffamily\bfseries Commande} & \sffamily\bfseries Effet\\
+\midrule
+.\textbackslash scripts\textbackslash demo.ps1 start & construit l'image et démarre la plateforme\\
+.\textbackslash scripts\textbackslash demo.ps1 inject PIVOT\_HUB & injecte une fraude du type demandé\\
+.\textbackslash scripts\textbackslash demo.ps1 crash & tue Spark, le redémarre et vérifie l'intégrité du lakehouse\\
+.\textbackslash scripts\textbackslash demo.ps1 evaluate & rappel, précision, latence → \fichier{docs/resultats.md}\\
+.\textbackslash scripts\textbackslash demo.ps1 ablation & apport de chaque filtre de détection\\
+.\textbackslash scripts\textbackslash demo.ps1 benchmark & montée en charge → \fichier{docs/benchmark.md}\\
+.\textbackslash scripts\textbackslash demo.ps1 tests & \fichier{ruff} et \fichier{pytest} dans l'image\\
+python fraud\_graph\_delta\_schema.py -{}-print-ddl & DDL complet du lakehouse\\
+\bottomrule
+\end{tabular}
+\caption{Commandes de démonstration et de mesure.}
+\label{tab:commandes}
+\end{table}
+
+\begin{table}[htp]
+\centering\footnotesize
+\begin{tabular}{@{}>{\ttfamily}l>{\ttfamily}r>{\raggedright\arraybackslash}p{8.4cm}@{}}
+\toprule
+\multicolumn{1}{@{}l}{\sffamily\bfseries Variable} & \multicolumn{1}{r}{\sffamily\bfseries Défaut} & \sffamily\bfseries Rôle\\
+\midrule
+RATE & 50 & transactions normales par seconde\\
+FRAUD\_EVERY & 45 & une fraude toutes les N secondes (30 pour l'évaluation)\\
+WINDOW\_MINUTES / WATERMARK\_MINUTES & 10 / 2 & fenêtre glissante et retard toléré\\
+SLOW\_PATH\_SECONDS & 90 & cadence du chemin lent\\
+HIGH\_VALUE\_MAD & 20000 & seuil du graphe des gros flux\\
+MULE\_MIN\_SENDERS / MULE\_MIN\_INFLOW\_MAD & 6 / 30000 & seuils de la règle des mules\\
+KAFKA\_MIN\_LEVEL & MEDIUM & niveau minimal publié dans \fichier{fraud-alerts}\\
+\bottomrule
+\end{tabular}
+\caption{Principales variables de configuration (\fichier{fraud/config.py}).}
+\label{tab:config}
+\end{table}
+
+\chapter{Extrait du DDL Delta}
+\label{ann:ddl}
+Le DDL complet des sept tables est produit par
+\fichier{python fraud\_graph\_delta\_schema.py -{}-print-ddl} (copie dans
+\fichier{docs/ddl.sql}). Extrait : la table des alertes et ses contraintes.
+
+\lstinputlisting[language=SQL, firstline=81, lastline=109, morekeywords={DELTA,TBLPROPERTIES,PARTITIONED,COMMENT}]{../docs/ddl.sql}
+
+\chapter{Reproductibilité des résultats}
+\label{ann:reproductibilite}
+
+Les figures de données sont produites en deux temps : un script exécuté
+dans le conteneur lit le lakehouse, les journaux de métriques et la vérité
+terrain et les exporte en CSV/JSON (\fichier{rapport/exporter\_donnees.py}) ;
+un second script trace les figures à partir de ces exports
+(\fichier{rapport/generer\_figures.py}). Deux séries sont conservées en dur,
+faute de trace dans le lakehouse (remis à zéro entre les runs) : les durées
+des six versions du chemin rapide et les résultats des quatre premiers runs
+d'évaluation, relevés au fil du développement (tableau~\ref{tab:repro}).
+
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{5.6cm}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+\toprule
+\sffamily\bfseries Élément du rapport & \sffamily\bfseries Source\\
+\midrule
+Trafic, montants, activité des comptes & table \fichier{bronze/transactions}, fenêtre du run d'évaluation\\
+Fraudes injectées, rappel, délais & topic \fichier{ground-truth} et \fichier{scripts/evaluate.py}\\
+Alertes, scores, sous-graphes & tables \fichier{gold/*}\\
+PageRank & table \fichier{silver/account\_metrics}, dernier instantané du run\\
+Micro-batchs, chemin lent, panne & \fichier{metrics/fast\_path.jsonl}, \fichier{slow\_path.jsonl}\\
+Élagage (candidats, noyau, SCC) & rejeu de \fichier{SlidingGraphIndex} et de l'élagage sur le bronze du run\\
+Versions et partitions Delta & journal \fichier{\_delta\_log} (delta-rs)\\
+Mémoire & relevés \fichier{docker stats} pendant deux runs de 40~minutes\\
+Ablation, benchmark & \fichier{docs/ablation.json}, \fichier{docs/benchmark.json}\\
+Versions du chemin rapide, runs A à D & valeurs relevées pendant le développement (en dur)\\
+Captures d'écran & \fichier{rapport/captures\_rapport.py} (Playwright) sur la plateforme en fonctionnement\\
+\bottomrule
+\end{tabular}
+\caption{Correspondance entre les résultats présentés et leurs sources.}
+\label{tab:repro}
+\end{table}
+
+\chapter{Structure du dépôt}
+\begin{lstlisting}[language={}, frame=leftline]
+financial_graph_producer.py      livrable 1 : générateur de transactions et de fraudes
+spark_graph_fraud_streaming.py   livrable 2 : streaming, motifs, PageRank, alertes
+fraud_graph_delta_schema.py      livrable 3 : schéma DDL du lakehouse Delta
+graph_network_dashboard.py       livrable 4 : tableau de bord Streamlit / PyVis
+fraud/                           code partagé (scénarios, score, détection, index, rendu)
+scripts/                         évaluation, benchmark, intégrité, captures, démo
+tests/                           29 tests pytest (pur Python et Spark)
+conf/                            pools FAIR Spark, configuration log4j2
+docs/                            architecture, démo, questions du jury, résultats, DDL
+rapport/                         ce rapport : sources LaTeX, export des données, figures
+Dockerfile, docker-compose.yml   image Java 17 + jars hors ligne, 5 services
+\end{lstlisting}

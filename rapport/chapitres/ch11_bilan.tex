@@ -1,0 +1,69 @@
+% ============================================================
+% CHAPITRE 11
+% ============================================================
+\chapter{Limites, perspectives et bilan}
+\label{ch:bilan}
+
+\section{Limites}
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{5.0cm}>{\raggedright\arraybackslash}p{4.8cm}@{}}
+\toprule
+\sffamily\bfseries Limite & \sffamily\bfseries Conséquence & \sffamily\bfseries Piste\\
+\midrule
+Données synthétiques & les chiffres mesurent des schémas connus & rejouer un jeu public (IBM AML) ou des données bancaires anonymisées\\
+Alerte en secondes, pas en sous-seconde & 3,8~s (p50) dont 2,3~s d'écritures Delta & publier l'alerte avant d'écrire, sur un exécuteur dédié ; Delta en asynchrone\\
+Un seul nœud & débit testé jusqu'à 100~tx/s & cluster Spark, Kafka à plusieurs brokers, plus de partitions\\
+État du chemin rapide sur le driver & mémoire bornée par la fenêtre ; reconstruit depuis bronze au redémarrage & état partagé (RocksDB, Redis) si plusieurs instances\\
+Cycles de plus de 5 sauts, fraudes de plus de 10~min & non détectés & fenêtres plus longues en différé, recherche bornée par les SCC\\
+Mules : 80\,\% de rappel & dépend d'un historique « calme » & seuils appris par compte, signaux complémentaires (âge du compte, géographie)\\
+Score à base de règles & pondérations fixées à la main & apprentissage supervisé sur les métriques de graphe, ou GNN, dès qu'existent des étiquettes\\
+\bottomrule
+\end{tabular}
+\caption{Limites de la plateforme et pistes d'amélioration.}
+\label{tab:limites}
+\end{table}
+
+\section{Perspectives}
+Trois prolongements paraissent les plus utiles. D'abord, \textbf{séparer
+l'alerte de l'historisation} : publier dans Kafka dès la détection, sur un
+exécuteur dédié, et laisser Delta absorber les écritures en différé ferait
+passer la latence sous la seconde sans toucher à la détection. Ensuite,
+\textbf{apprendre le score} : les métriques de graphe déjà calculées
+(PageRank, degrés, flux traversant, appartenance à une SCC) forment un jeu de
+caractéristiques prêt pour un modèle supervisé, dès que des alertes
+qualifiées par des analystes seront disponibles --- la fiche
+d'investigation prévoit déjà la case « décision de l'analyste ».
+Enfin, \textbf{passer à l'échelle} sur un cluster, où la séparation en deux
+chemins prend tout son sens : exécuteurs dédiés au chemin rapide, chemin lent
+sur des ressources élastiques.
+
+\section{Bilan personnel}
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  comp/.style={draw=#1, line width=0.8pt, fill=#1!8, rounded corners=3pt, text width=4.55cm,
+    minimum height=2.6cm, align=left, font=\sffamily\scriptsize, inner sep=5pt},
+  ic/.style={font=\large, color=#1}]
+  \foreach \x/\y/\c/\i/\t/\d in {
+    0/0/bleuprojet/F1C0/{Streaming et lakehouse}/{Structured Streaming, watermarks, \fichier{foreachBatch}, checkpoints ; Delta : transactions idempotentes, contraintes, time travel.},
+    5.1/0/orangeprojet/F542/{Graph analytics}/{Motifs, PageRank, SCC, composantes connexes ; savoir quand un algorithme global est inutile et comment l'éviter.},
+    10.2/0/vertcode/F201/{Mesure et évaluation}/{Vérité terrain, rappel et précision, ablation, benchmark : ne rien affirmer sans chiffre.},
+    0/-2.9/cat4/F0AD/{Performance Spark}/{Lecture des plans et de l'interface Spark, matérialisation, diffusion, mémoire du JVM et mémoire native.},
+    5.1/-2.9/cat5/F06E/{Explicabilité}/{Un score lisible par un analyste, une fiche d'investigation, une alerte compréhensible sans le code.},
+    10.2/-2.9/encre2/F1B3/{Industrialisation}/{Docker Compose, image hors ligne, tests, intégration continue, script de démonstration.}} {
+    \node[comp=\c] at (\x,\y) {{\color{\c}\large\ico{\i}}\hspace{5pt}\textbf{\small \t}\\[3pt]\d};
+  }
+\end{tikzpicture}
+\caption{Compétences mobilisées et développées pendant le projet.}
+\label{fig:competences}
+\end{figure}
+
+Ce projet m'a surtout appris que, dans un système de streaming, l'essentiel du
+travail commence une fois que « ça marche » : la première version détectait
+déjà les carrousels, mais trop lentement pour servir et en se dégradant au
+fil du temps. Chaque progrès est venu d'une mesure qui contredisait une
+intuition --- un \fichier{isin()} présumé efficace, un \fichier{unpersist()}
+présumé libérer la mémoire, une règle des mules présumée suffisante. J'en
+retiens une méthode : instrumenter d'abord, optimiser ensuite, et garder la
+trace de ce qui n'a pas marché.

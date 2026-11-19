@@ -1,0 +1,209 @@
+% ============================================================
+% CHAPITRE 1
+% ============================================================
+\chapter{Contexte et cadrage du projet}
+\label{ch:contexte}
+
+\section{Le sujet : voir une boucle dans un flux}
+Le Mini-Projet~17 demande un pipeline Big Data de \emph{stream processing} et
+de \emph{graph analytics} capable de détecter « précocement » deux familles de
+fraude : la \motcle{fraude en carrousel} et les \motcle{structures de
+blanchiment en boucle}. Dans les deux cas, l'argent revient à son point de
+départ après avoir traversé des sociétés écrans ; chaque étape prélève une
+petite commission (figure~\ref{fig:carrousel}). Le système doit construire
+dynamiquement un graphe orienté des virements, y chercher des cycles, repérer
+les comptes pivots et les comptes mules, isoler les réseaux, publier une
+alerte dans Kafka et historiser chaque anomalie dans Delta Lake.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}
+  % --- vue « transaction par transaction »
+  \node[font=\sffamily\small\bfseries, color=encre2, anchor=west] at (-0.3,2.0) {Ce que voit un contrôle classique};
+  \foreach \s/\d/\m/\h/\y in {A/B/{133\,500}/{20:52:59}/1.2, B/C/{129\,629}/{20:54:27}/0.45, C/A/{126\,436}/{20:55:26}/-0.3} {
+    \node[compte, minimum size=6.5mm] (s) at (0,\y) {\s};
+    \node[compte, minimum size=6.5mm] (d) at (2.3,\y) {\d};
+    \draw[virement] (s) -- node[montant, above=0.5mm, fill=none] {\m~MAD} (d);
+    \node[font=\sffamily\tiny, color=encre2, anchor=west] at (2.75,\y) {\h};
+    \node[font=\sffamily\scriptsize, anchor=west] at (3.95,\y) {\oui~banal};
+  }
+  % --- vue « graphe »
+  \begin{scope}[xshift=9.6cm, yshift=0.45cm]
+  \node[font=\sffamily\small\bfseries, color=encre2] at (0,1.55) {Ce que voit l'analyse de graphe};
+  \node[compteo] (a) at (90:1.05) {A};
+  \node[compteo] (b) at (-30:1.05) {B};
+  \node[compteo] (c) at (210:1.05) {C};
+  \draw[virement, color=orangeprojet, bend left=25] (a) to node[montant, right=1mm] {133\,500} (b);
+  \draw[virement, color=orangeprojet, bend left=25] (b) to node[montant, below=1mm] {129\,629} (c);
+  \draw[virement, color=orangeprojet, bend left=25] (c) to node[montant, left=1mm] {126\,436} (a);
+  \node[font=\sffamily\tiny, align=center, color=encre2] at (0,0) {2 min 27 s\\$-$2,7\,\%/étape};
+  \node[font=\sffamily\scriptsize, anchor=west, text width=3.0cm] at (1.9,0.1)
+    {\non~\textbf{boucle fermée}, montants quasi identiques, commission régulière};
+  \end{scope}
+\end{tikzpicture}
+\caption[La fraude en carrousel : invisible transaction par transaction]{La fraude en carrousel :
+chaque virement est banal, la boucle ne l'est pas. Montants et horaires d'une alerte réelle du run
+d'évaluation (score 95, niveau CRITICAL).}
+\label{fig:carrousel}
+\end{figure}
+
+\section{Exigences de l'énoncé et réponses apportées}
+L'énoncé fixe les algorithmes, la fenêtre temporelle, le format des messages,
+le partitionnement du lakehouse et les noms des quatre livrables. Le
+tableau~\ref{tab:exigences} met chaque exigence en regard de sa réalisation ;
+les colonnes de droite renvoient au chapitre qui la détaille.
+
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{8.3cm}c>{\centering\arraybackslash}p{0.8cm}@{}}
+\toprule
+\sffamily\bfseries Exigence de l'énoncé & \sffamily\bfseries Réalisation & & \sffamily\bfseries Ch.\\
+\midrule
+Flux de virements JSON dans Kafka & Producteur réaliste, 5 typologies de fraude, vérité terrain publiée & \oui & 4\\
+Motif \fichier{(a)->(b)->(c)->(a)} & Motif GraphFrames incrémental + ordre temporel des virements & \oui & 5\\
+Fenêtre glissante 10~min, watermark 2~min & \fichier{window(10 min, 1 min)} + \fichier{withWatermark} ; graphe glissant de 10 + 2~min & \oui & 3\\
+Comptes mules & Rafale de dépôts $\geq$ 3$\times$ le rythme habituel, puis retrait unique & \oui & 5\\
+PageRank : comptes pivots & PageRank sur le graphe des gros flux, combiné aux participations à des cycles & \oui & 5\\
+Connected Components : clusters & CC sur le sous-graphe des comptes déjà alertés & \oui & 5\\
+Alertes dans Kafka \fichier{fraud-alerts} & Alerte JSON expliquée, publiée avant toute écriture & \oui & 3\\
+Delta Lake, \fichier{risk\_level/dt} & Lakehouse médaillon, 7 tables, contraintes, écritures idempotentes & \oui & 6\\
+Restitution Streamlit / PyVis & 5 onglets, sous-graphes interactifs, fiche PDF, injection en direct & \oui & 7\\
+Alerte « en sous-seconde » & Motif en 0,73~s ; alerte complète en 3,8~s (p50) sur un portable & \partiel & 8\\
+\bottomrule
+\end{tabular}
+\caption[Exigences de l'énoncé et réalisation]{Exigences de l'énoncé et réalisation
+(\oui~atteint, \partiel~atteint en partie : voir le chapitre~\ref{ch:performance}).}
+\label{tab:exigences}
+\end{table}
+
+\section{Les quatre livrables et le code partagé}
+Les noms des quatre fichiers sont imposés. Pour qu'ils restent lisibles, tout
+ce qui est partagé --- génération des scénarios, score, détection, index du
+graphe glissant, lecture du lakehouse --- vit dans un paquet \fichier{fraud/}
+(figure~\ref{fig:livrables}). Le même module de score sert ainsi au producteur
+(pour la vérité terrain), au job Spark, au tableau de bord et aux tests.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  livrable/.style={draw=bleuprojet, line width=0.9pt, fill=bleuclair!50, rounded corners=3pt,
+    text width=3.25cm, minimum height=1.55cm, align=center, font=\sffamily\scriptsize, inner sep=3pt},
+  partage/.style={draw=grismoyen, dashed, fill=grisclair, rounded corners=2pt, align=center,
+    font=\ttfamily\tiny, inner sep=2pt, text width=2.25cm, minimum height=0.62cm}]
+  \foreach \f/\r/\l [count=\i] in {
+    {financial\_graph\_producer.py}/{Générer le trafic et injecter les fraudes}/{182 lignes},
+    {spark\_graph\_fraud\_streaming.py}/{Construire le graphe, détecter, alerter, historiser}/{680 lignes},
+    {fraud\_graph\_delta\_schema.py}/{Définir et créer les 7 tables Delta}/{255 lignes},
+    {graph\_network\_dashboard.py}/{Explorer les alertes et les sous-graphes}/{469 lignes}} {
+    \node[livrable] (l\i) at (1.9+\i*3.75-3.75,0) {{\ttfamily\bfseries\tiny \f}\\[2pt]\r\\[1pt]{\color{encre2}\tiny\l}};
+    \draw[color=grismoyen, line width=0.6pt] (l\i.south) -- ++(0,-0.35);
+  }
+  \draw[color=grismoyen, line width=0.6pt] ($(l1.south)+(0,-0.35)$) -- ($(l4.south)+(0,-0.35)$);
+  \draw[-{Stealth[length=1.6mm]}, color=grismoyen, line width=0.6pt] ($(l1.south)!0.5!(l4.south)+(0,-0.35)$) -- ++(0,-0.35)
+    node[midway, right, font=\sffamily\tiny, color=encre2] {importent};
+  \foreach \m [count=\k from 0] in {scenarios.py, scoring.py, detection.py, graph\_index.py, alerts.py, kafka\_io.py} {
+    \node[partage] at (0.95+\k*2.6,-1.95) {\m};
+  }
+  \foreach \m [count=\k from 0] in {config.py, spark\_session.py, dashboard\_data.py, viz.py, report\_pdf.py} {
+    \node[partage] at (2.25+\k*2.6,-2.75) {\m};
+  }
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}, color=grismoyen, line width=0.7pt]
+    (-0.25,-3.2) -- (15.15,-3.2) node[midway, below=6pt, font=\sffamily\scriptsize\bfseries, color=encre2]
+    {paquet \fichier{fraud/} : 1\,732 lignes de code partagé};
+\end{tikzpicture}
+\caption[Les quatre livrables imposés et le paquet partagé]{Les quatre livrables imposés
+(en bleu) et le paquet \fichier{fraud/} qu'ils partagent. S'y ajoutent les scripts d'évaluation
+(\fichier{scripts/}, 664 lignes) et les tests (\fichier{tests/}, 315 lignes).}
+\label{fig:livrables}
+\end{figure}
+
+\section{Démarche}
+Le projet a été conduit en huit phases, chacune terminée par un élément
+démontrable (figure~\ref{fig:phases}). Une règle a guidé tout le travail :
+\emph{ne rien affirmer qui ne soit mesuré}. Le producteur publie donc la
+liste exacte des fraudes injectées dans un topic Kafka séparé
+(\fichier{ground-truth}), et chaque modification de règle ou d'architecture a
+été suivie d'un run d'évaluation complet contre cette vérité terrain.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  phase/.style={rounded corners=3pt, fill=#1, text=white, minimum height=8mm, text width=1.6cm,
+    align=center, font=\sffamily\tiny\bfseries},
+  livr/.style={font=\sffamily\tiny, color=encre2, align=center, text width=1.75cm, anchor=north}]
+  \foreach \nom/\l/\c [count=\i] in {
+    {0 · Socle}/{Docker Compose, image Java~17, jars hors ligne}/grismoyen,
+    {1 · Producteur}/{population, 5 fraudes, vérité terrain}/bleuprojet,
+    {2 · Schéma Delta}/{médaillon, partitions, contraintes}/bleuprojet,
+    {3 · Cycles}/{motif incrémental, score, alertes Kafka}/orangeprojet,
+    {4 · PageRank \& co.}/{SCC, cycles longs, mules, CC}/orangeprojet,
+    {5 · Dashboard}/{PyVis, fiche PDF, injection}/bleuprojet,
+    {6 · Évaluation}/{rappel, précision, ablation, panne}/vertcode,
+    {7 · Restitution}/{rapport, démo, CI}/vertcode} {
+    \node[phase=\c] (p\i) at (\i*1.95,0) {\nom};
+    \node[livr] at ($(p\i.south)+(0,-0.12)$) {\l};
+  }
+  \foreach \a/\b in {1/2,2/3,3/4,4/5,5/6,6/7,7/8}
+    \draw[-{Stealth[length=1.5mm]}, line width=0.6pt, color=grismoyen] (p\a) -- (p\b);
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt, color=orangeprojet, rounded corners=4pt]
+    ($(p7.north)+(0,0.05)$) -- ++(0,0.45) -| node[pos=0.25, above, font=\sffamily\tiny, color=orangeprojet]
+    {5 runs d'évaluation : chaque mesure renvoie aux phases 3--4 (règles, performance, mémoire)} ($(p4.north)+(0,0.05)$);
+\end{tikzpicture}
+\caption{Les huit phases du projet et la boucle « mesurer, corriger, re-mesurer ».}
+\label{fig:phases}
+\end{figure}
+
+\section{Outils et environnement}
+Toute la plateforme tourne dans \textbf{Docker Compose} sur un ordinateur
+portable sous Windows (8~processeurs logiques, environ 6~Go de mémoire
+accordés à Docker). Ce choix n'était pas qu'une commodité : la machine hôte
+dispose de Java~23, que Spark~3.5 ne supporte pas, et des utilitaires Hadoop
+manquent sous Windows. L'image construite embarque Java~17 et télécharge une
+fois pour toutes les jars Kafka, Delta et GraphFrames : la démonstration
+fonctionne ensuite sans connexion internet.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  nomoutil/.style={font=\sffamily\scriptsize, align=center, anchor=north, text width=1.85cm},
+  badge/.style={rounded corners=3pt, draw=#1, fill=#1!12, line width=0.8pt, minimum width=1.55cm,
+    minimum height=8mm, font=\sffamily\scriptsize\bfseries, text=#1!70!black, align=center}]
+  \node[anchor=west, font=\sffamily\small\bfseries, color=bleuprojet] at (0,0.85) {Chaîne de traitement};
+  \foreach \i/\logo/\titre/\role in {
+     0/kafka/{Kafka 4.2}/{flux (KRaft)},
+     1/spark/{Spark 3.5.7}/{Structured Streaming},
+     3/streamlit/{Streamlit 1.50}/{tableau de bord},
+     5/docker/{Docker Compose}/{déploiement}} {
+    \node at (\i*1.97+0.95,0)
+      {\includegraphics[height=8mm,width=1.6cm,keepaspectratio]{figures/logos/\logo.png}};
+    \node[nomoutil] at (\i*1.97+0.95,-0.55) {\textbf{\titre}\\\color{encre2}\role};
+  }
+  \node[badge=orangeprojet] at (2*1.97+0.95,0) {Graph\\Frames};
+  \node[nomoutil] at (2*1.97+0.95,-0.55) {\textbf{GraphFrames 0.12}\\\color{encre2}graphes};
+  \node[badge=cat3] at (4*1.97+0.95,0) {Delta\\Lake};
+  \node[nomoutil] at (4*1.97+0.95,-0.55) {\textbf{Delta Lake 3.3}\\\color{encre2}lakehouse};
+  \node[badge=cat5] at (6*1.97+0.95,0) {PyVis\\NetworkX};
+  \node[nomoutil] at (6*1.97+0.95,-0.55) {\textbf{PyVis}\\\color{encre2}graphes interactifs};
+  \node[badge=cat4] at (7*1.97+0.95,0) {delta-rs};
+  \node[nomoutil] at (7*1.97+0.95,-0.55) {\textbf{deltalake}\\\color{encre2}lecture sans JVM};
+  \node[anchor=west, font=\sffamily\small\bfseries, color=encre2] at (0,-2.05) {Développement et restitution};
+  \foreach \i/\logo/\titre/\role in {
+     0/python/{Python 3.11}/{langage},
+     1/pandas/pandas/{données},
+     2/matplotlib/Matplotlib/{figures},
+     3/git/Git/{versions},
+     4/vscode/{VS Code}/{éditeur},
+     5/latex/{LaTeX}/{rapport}} {
+    \node at (\i*1.97+0.95,-2.9)
+      {\includegraphics[height=8mm,width=1.6cm,keepaspectratio]{figures/logos/\logo.png}};
+    \node[nomoutil] at (\i*1.97+0.95,-3.45) {\textbf{\titre}\\\color{encre2}\role};
+  }
+  \node[badge=encre2] at (6*1.97+0.95,-2.9) {pytest\\ruff};
+  \node[nomoutil] at (6*1.97+0.95,-3.45) {\textbf{pytest, ruff}\\\color{encre2}tests, lint};
+  \node[badge=encre2] at (7*1.97+0.95,-2.9) {GitHub\\Actions};
+  \node[nomoutil] at (7*1.97+0.95,-3.45) {\textbf{CI}\\\color{encre2}intégration continue};
+\end{tikzpicture}
+\caption[Outils et versions]{Outils et versions utilisés (logos : Wikimedia Commons ; les outils
+sans logo libre sont représentés par une pastille).}
+\label{fig:outils}
+\end{figure}

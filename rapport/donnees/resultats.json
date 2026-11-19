@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-11-18T21:08:52.794591+00:00",
+  "period_minutes": 29.5,
+  "scenarios": 42,
+  "alerts_total": 111,
+  "alerts_medium_plus": 102,
+  "recall": [
+    {
+      "type": "CARROUSEL",
+      "injectes": 12,
+      "detectes": 12,
+      "delai_median_s": 3.87,
+      "delai_max_s": 8.053,
+      "rappel": 1.0
+    },
+    {
+      "type": "CYCLE_LONG",
+      "injectes": 1,
+      "detectes": 1,
+      "delai_median_s": 79.179,
+      "delai_max_s": 79.179,
+      "rappel": 1.0
+    },
+    {
+      "type": "FAN_IN_MULE",
+      "injectes": 15,
+      "detectes": 12,
+      "delai_median_s": 59.392,
+      "delai_max_s": 505.756,
+      "rappel": 0.8
+    },
+    {
+      "type": "PIVOT_HUB",
+      "injectes": 8,
+      "detectes": 8,
+      "delai_median_s": 4.934,
+      "delai_max_s": 80.097,
+      "rappel": 1.0
+    },
+    {
+      "type": "SCATTER_GATHER",
+      "injectes": 6,
+      "detectes": 6,
+      "delai_median_s": 69.773,
+      "delai_max_s": 88.423,
+      "rappel": 1.0
+    }
+  ],
+  "precision": [
+    {
+      "alert_type": "CLUSTER",
+      "alertes": 20,
+      "vraies": 20,
+      "precision": 1.0
+    },
+    {
+      "alert_type": "CYCLE",
+      "alertes": 49,
+      "vraies": 48,
+      "precision": 0.98
+    },
+    {
+      "alert_type": "CYCLE_LONG",
+      "alertes": 1,
+      "vraies": 1,
+      "precision": 1.0
+    },
+    {
+      "alert_type": "MULE",
+      "alertes": 13,
+      "vraies": 13,
+      "precision": 1.0
+    },
+    {
+      "alert_type": "PIVOT",
+      "alertes": 11,
+      "vraies": 11,
+      "precision": 1.0
+    },
+    {
+      "alert_type": "SCATTER_GATHER",
+      "alertes": 8,
+      "vraies": 8,
+      "precision": 1.0
+    }
+  ],
+  "overall_recall": 0.929,
+  "overall_precision": 0.99,
+  "fast_latency_s": {
+    "50": 3.8,
+    "95": 10.71,
+    "99": 12.43
+  },
+  "fast_processed_rps_median": 50.614394382679926,
+  "alerts_by_level": {
+    "HIGH": 69,
+    "CRITICAL": 19,
+    "MEDIUM": 14,
+    "LOW": 9
+  }
+}

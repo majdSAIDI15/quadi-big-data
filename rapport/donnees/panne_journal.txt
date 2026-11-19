@@ -1,0 +1,2 @@
+fraud-spark  | 21:45:10 [recover] graphe glissant=22695 arêtes, alertes connues=191, pagerank=329 comptes, max_event_time=2026-11-18 21:41:16.259000+00:00
+fraud-spark  | 21:45:12 [start] 3 requêtes actives (ingest, traffic-windows, slow-path) — Kafka=kafka:9092, fenêtre=10 min, watermark=2 minutes, Spark UI http://localhost:4040

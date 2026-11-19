@@ -1,0 +1,246 @@
+% ============================================================
+% CHAPITRE 3
+% ============================================================
+\chapter{Architecture de la plateforme}
+\label{ch:architecture}
+
+\section{Vue d'ensemble}
+La figure~\ref{fig:architecture} suit une transaction de bout en bout. Le
+producteur l'écrit dans le topic \fichier{transactions} ; le job Spark la lit
+avec trois requêtes de streaming ; les alertes repartent dans Kafka
+(\fichier{fraud-alerts}) et tout est historisé dans le lakehouse Delta, que le
+tableau de bord lit sans passer par Spark. Le topic \fichier{ground-truth},
+réservé à l'évaluation, n'est lu par aucun détecteur.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  bloc/.style={draw=#1, line width=0.9pt, fill=white, rounded corners=3pt, align=center,
+    font=\sffamily\scriptsize, inner sep=3pt},
+  req/.style={draw=#1, line width=0.9pt, fill=#1!8, rounded corners=3pt, align=left,
+    font=\sffamily\tiny, text width=3.85cm, inner sep=3pt},
+  tb/.style={draw=#1, line width=0.9pt, fill=#1!10, rounded corners=3pt, text width=2.15cm,
+    minimum height=0.95cm, align=center, font=\sffamily\tiny, inner sep=2pt},
+  f/.style={-{Stealth[length=1.9mm]}, line width=0.75pt, color=encre2},
+  fo/.style={-{Stealth[length=1.9mm]}, line width=0.9pt, color=orangeprojet},
+  fv/.style={-{Stealth[length=1.9mm]}, line width=0.9pt, color=vertcode},
+  etiq/.style={font=\sffamily\tiny, color=encre2, fill=white, inner sep=1pt}]
+  % producteur
+  \node[bloc=bleuprojet, text width=1.75cm] (prod) at (0,0.15) {\textbf{Producteur}\\[2pt]
+    {\tiny 10\,000 comptes\\50 tx/s\\1 fraude / 30 s\\retards, erreurs}};
+  % kafka (entrée)
+  \node[topic] (ktx) at (2.65,0.85) {\textbf{transactions}\\{\tiny 3 partitions}};
+  \node[topic] (kgt) at (2.65,-1.55) {\textbf{ground-}\\\textbf{truth}};
+  \node[font=\sffamily\scriptsize\bfseries, color=encre2] at (2.65,1.9) {Kafka};
+  % spark
+  \node[req=orangeprojet] (ing) at (6.35,1.5) {\textbf{\scriptsize ingest} · toutes les 1 s\\
+    qualité, watermark, doublons ; graphe glissant ; motif sur les arêtes candidates ; score};
+  \node[req=bleuprojet] (trf) at (6.35,0.15) {\textbf{\scriptsize traffic-windows} · toutes les 60 s\\
+    \fichier{window(10 min, 1 min)} + watermark 2 min};
+  \node[req=vertcode] (slw) at (6.35,-1.2) {\textbf{\scriptsize slow-path} · toutes les 90 s\\
+    PageRank, SCC, cycles 4--5, mules, scatter-gather, pivots, CC};
+  \node[draw=grismoyen, dashed, rounded corners=2pt, font=\sffamily\tiny, align=center, fill=white,
+    text width=3.85cm, inner sep=2pt] (mem) at (6.35,-2.3) {état en mémoire du driver : index d'adjacence
+    (10 + 2 min), journal des dépôts (40 min)};
+  \begin{scope}[on background layer]
+    \node[draw=encre2, line width=0.6pt, rounded corners=4pt, fill=grisclair, inner sep=5pt,
+      fit=(ing) (trf) (slw) (mem)] (spark) {};
+  \end{scope}
+  \node[font=\sffamily\scriptsize\bfseries, color=encre2, anchor=north] at (spark.south) {Spark 3.5 + GraphFrames};
+  % delta (gold en haut : c'est ce que lit le tableau de bord)
+  \node[tb=orangeprojet] (gol) at (10.35,1.5) {\textbf{\scriptsize gold}\\alertes, sous-graphes};
+  \node[tb=cat3] (sil) at (10.35,0.15) {\textbf{\scriptsize silver}\\métriques des comptes, trafic};
+  \node[tb=bleuprojet] (bro) at (10.35,-1.2) {\textbf{\scriptsize bronze}\\transactions, quarantaine};
+  \begin{scope}[on background layer]
+    \node[draw=encre2, line width=0.6pt, rounded corners=4pt, fill=grisclair, inner sep=5pt,
+      fit=(gol) (sil) (bro)] (delta) {};
+  \end{scope}
+  \node[font=\sffamily\scriptsize\bfseries, color=encre2, anchor=north] at (delta.south) {Delta Lake};
+  % sorties
+  \node[topic, fill=orangeclair] (kal) at (13.75,1.75) {\textbf{fraud-}\\\textbf{alerts}};
+  \node[bloc=bleuprojet, text width=1.85cm] (dash) at (13.75,0.15) {\textbf{Dashboard}\\[2pt]
+    {\tiny Streamlit + PyVis\\lecture delta-rs\\injection de fraude}};
+  \node[bloc=grismoyen, text width=1.85cm] (eval) at (13.75,-1.45) {\textbf{Évaluation}\\[1pt]{\tiny rappel, précision}};
+  % flux d'entrée
+  \draw[f] (prod.north) |- (ktx.west);
+  \draw[f, dashed] (prod.south) |- (kgt.west);
+  \draw[f] (ktx.east) -- (ing.west);
+  \draw[f] (ktx.east) -- (trf.west);
+  % écritures
+  \draw[fo] (ing.east) -- (gol.west);
+  \draw[fo] (ing.east) -- (bro.north west);
+  \draw[f, color=bleuprojet] (trf.east) -- (sil.west);
+  \draw[fv] (slw.east) -- (sil.south west);
+  \draw[fv] (slw.east) -- (gol.south west);
+  \draw[fv, dashed, {Stealth[length=1.9mm]}-] ($(slw.east)+(0,-0.22)$) -- ($(bro.west)+(0,-0.22)$);
+  % alertes vers Kafka
+  \draw[fo] (spark.north) -- ++(0,0.3) -| node[etiq, pos=0.25, above] {alertes de niveau $\geq$ MEDIUM (chemins rapide et lent)} (kal.north);
+  % lecture
+  \draw[f] (delta.east |- dash.west) -- (dash.west);
+  \draw[f, dashed] (delta.east |- eval.west) -- (eval.west);
+  \draw[f, dashed] (kgt.south) -- ++(0,-1.45) -| (eval.south);
+\end{tikzpicture}
+\caption[Architecture de la plateforme]{Architecture de la plateforme. En orange, le chemin rapide
+(alerte en quelques secondes) ; en vert, le chemin lent, qui relit sa fenêtre dans le bronze (flèche
+verte pointillée) ; en gris pointillé, les flux réservés à l'évaluation.}
+\label{fig:architecture}
+\end{figure}
+
+\section{Deux vitesses d'analyse}
+Le carrousel doit être signalé pendant que l'argent tourne encore ; les
+autres typologies --- un compte mule, un réseau de schémas liés --- ne se
+révèlent qu'une fois terminées et ne demandent pas la même réactivité. La
+plateforme sépare donc un \motcle{chemin rapide}, qui ne regarde à chaque
+seconde que ce qui vient d'arriver, et un \motcle{chemin lent}, qui analyse
+toute la fenêtre de 10~minutes toutes les 90~secondes
+(figure~\ref{fig:deuxvitesses}). Le chemin lent n'exécute les calculs lourds
+(PageRank, SCC, cycles longs) qu'un passage sur deux ; il est restreint à une
+ou deux partitions et placé dans un pool FAIR de faible poids, pour ne jamais
+priver le chemin rapide de processeurs.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[x=0.07cm, y=1cm]
+  \foreach \t in {0,30,...,180} {
+    \draw[grisligne] (\t,0.35) -- (\t,-2.55);
+    \node[font=\sffamily\tiny, color=encre2] at (\t,-2.75) {\t\,s};
+  }
+  \node[font=\sffamily\scriptsize\bfseries, anchor=east, color=orangeprojet] at (-3,0) {chemin rapide};
+  \node[font=\sffamily\scriptsize\bfseries, anchor=east, color=vertcode] at (-3,-1) {chemin lent};
+  \node[font=\sffamily\scriptsize\bfseries, anchor=east, color=bleuprojet] at (-3,-2) {fenêtres de trafic};
+  % micro-batchs de ~3,4 s
+  \foreach \t in {0,3.4,...,178} \fill[orangeprojet!75] (\t+0.25,-0.2) rectangle (\t+3.15,0.2);
+  % chemin lent
+  \fill[vertcode] (0,-1.22) rectangle (32,-0.78);
+  \node[font=\sffamily\tiny, color=white] at (16,-1) {lourd · 32 s};
+  \fill[vertcode!55] (90,-1.22) rectangle (101,-0.78);
+  \node[font=\sffamily\tiny, anchor=west] at (102,-1) {léger};
+  \fill[vertcode] (180,-1.22) rectangle (183,-0.78);
+  % fenêtres
+  \foreach \t in {60,120,180} \fill[bleuprojet] (\t-1.2,-2.2) rectangle (\t+1.2,-1.8);
+  \node[font=\sffamily\tiny, anchor=west] at (62,-2) {MERGE des fenêtres closes};
+  % événements
+  \draw[-{Stealth[length=1.6mm]}, color=encre, line width=0.7pt] (20,0.95) -- (20,0.28);
+  \node[font=\sffamily\tiny, anchor=south, align=center] at (20,0.95) {un carrousel se ferme};
+  \draw[-{Stealth[length=1.6mm]}, color=orangeprojet, line width=0.7pt] (24,0.28) to[bend left=40] (35,0.75);
+  \node[font=\sffamily\tiny\bfseries, color=orangeprojet, anchor=west] at (35,0.75) {alerte Kafka $\approx$ 4 s plus tard};
+  \draw[-{Stealth[length=1.6mm]}, color=encre, line width=0.7pt] (45,-0.35) -- (45,-0.75);
+  \node[font=\sffamily\tiny, anchor=west] at (46,-0.45) {une mule vide son compte};
+  \draw[-{Stealth[length=1.6mm]}, color=vertcode, line width=0.7pt] (47,-1.25) to[bend right=20] (92,-1.25);
+  \node[font=\sffamily\tiny\bfseries, color=vertcode, anchor=north] at (70,-1.38) {alerte au passage suivant};
+\end{tikzpicture}
+\caption[Les deux vitesses d'analyse]{Trois minutes de fonctionnement : micro-batchs du chemin rapide
+(durée médiane mesurée 3,4~s), passages lourd et léger du chemin lent (durée médiane 32~s pour
+le passage lourd), écriture des fenêtres de trafic.}
+\label{fig:deuxvitesses}
+\end{figure}
+
+\section{Trois requêtes de streaming}
+Le job Spark lance trois requêtes indépendantes, chacune avec son propre
+checkpoint (tableau~\ref{tab:requetes}). Le chemin lent est lui-même une
+requête de streaming, mais dont la source est la table bronze : la lire
+« en flux » sert de minuterie fiable et garantit qu'il ne s'exécute jamais en
+double.
+
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{2.3cm}c>{\raggedright\arraybackslash}p{5.1cm}c@{}}
+\toprule
+\sffamily\bfseries Requête & \sffamily\bfseries Source & \sffamily\bfseries Déclencheur & \sffamily\bfseries Écrit dans & \sffamily\bfseries Pool FAIR\\
+\midrule
+\fichier{ingest} & Kafka \fichier{transactions} & 1~s & Kafka \fichier{fraud-alerts}, gold (alertes, sous-graphes), bronze (transactions, quarantaine) & \fichier{fast} (poids 4)\\
+\fichier{traffic-windows} & Kafka \fichier{transactions} & 60~s & silver \fichier{traffic\_windows} (MERGE) & \fichier{ops} (poids 1)\\
+\fichier{slow-path} & Delta bronze & 90~s & Kafka \fichier{fraud-alerts}, gold, silver \fichier{account\_metrics} & \fichier{slow} (poids 1)\\
+\bottomrule
+\end{tabular}
+\caption{Les trois requêtes de streaming du job Spark.}
+\label{tab:requetes}
+\end{table}
+
+\section{Le micro-batch du chemin rapide, pas à pas}
+La figure~\ref{fig:microbatch} détaille un micro-batch. Deux choix y sont
+déterminants. D'abord, le graphe glissant n'est pas un DataFrame relu à chaque
+lot mais un \motcle{index d'adjacence en mémoire} sur le driver : il permet de
+trouver en temps proportionnel au lot les seules arêtes qui peuvent fermer un
+triangle avec une arête nouvelle, et GraphFrames ne travaille que sur elles.
+Ensuite, l'\motcle{ordre des écritures} est délibéré : l'alerte part d'abord
+dans Kafka, puis dans gold, puis les transactions dans bronze. Une panne entre
+deux étapes rejoue le lot, qui redétecte la même alerte avec le même
+identifiant ; les écritures idempotentes absorbent le doublon
+(chapitre~\ref{ch:lakehouse}).
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  et/.style={draw=#1, line width=0.8pt, fill=#1!8, rounded corners=3pt, minimum height=1.55cm,
+    text width=1.55cm, align=center, font=\sffamily\tiny, inner sep=2pt},
+  num/.style={circle, fill=#1, text=white, font=\sffamily\tiny\bfseries, inner sep=0pt, minimum size=3.6mm}]
+  \foreach \t/\d/\c [count=\i] in {
+     {Lire Kafka}/{JSON brut, offsets}/grismoyen,
+     {Qualité}/{schéma, montant > 0, pas d'auto-virement → quarantaine}/bleuprojet,
+     {Watermark + doublons}/{retard > 2 min écarté ; \fichier{transaction\_id} déjà vu}/bleuprojet,
+     {Index glissant}/{ajout des arêtes, éviction > 12 min}/bleuprojet,
+     {Candidates}/{arêtes pouvant fermer un triangle}/orangeprojet,
+     {Motif GraphFrames}/{triangle \fichier{a→b→c→a} + ordre temporel}/orangeprojet,
+     {Score}/{règles expliquées, niveau}/orangeprojet,
+     {Écrire}/{Kafka → gold → bronze, idempotent}/vertcode} {
+    \node[et=\c] (s\i) at (\i*1.88,0) {\textbf{\t}\\[1pt]\d};
+    \node[num=\c] at ($(s\i.north west)+(0.05,-0.05)$) {\i};
+  }
+  \foreach \a/\b in {1/2,2/3,3/4,4/5,5/6,6/7,7/8}
+    \draw[-{Stealth[length=1.4mm]}, line width=0.6pt, color=encre2] (s\a) -- (s\b);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}, color=grismoyen] ($(s4.south west)+(0,-0.1)$) -- ($(s6.south east)+(0,-0.1)$)
+    node[midway, below=5pt, font=\sffamily\tiny, color=encre2, align=center] {sur ~36\,000 arêtes du graphe glissant,
+    ~110 seulement passent au motif};
+\end{tikzpicture}
+\caption{Les huit étapes d'un micro-batch du chemin rapide.}
+\label{fig:microbatch}
+\end{figure}
+
+\section{Déploiement}
+Les cinq services tournent dans des conteneurs bornés en mémoire
+(figure~\ref{fig:docker}). Les données --- lakehouse, checkpoints et journaux
+de métriques --- vivent dans un volume Docker partagé : un
+\fichier{docker compose down -v} remet la plateforme à zéro.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  ct/.style={draw=#1, line width=0.9pt, fill=white, rounded corners=3pt, text width=2.2cm,
+    minimum height=1.6cm, align=center, font=\sffamily\tiny, inner sep=3pt},
+  lim/.style={font=\sffamily\tiny\bfseries, fill=#1, text=white, rounded corners=1.5pt, inner sep=1.5pt}]
+  \foreach \n/\d/\m/\p/\c [count=\i] in {
+     {kafka}/{Apache Kafka 4.2.2, KRaft, 1 broker}/{900 Mo}/{:9094}/encre2,
+     {kafka-init}/{crée les 3 topics puis s'arrête}/{---}/{}/grismoyen,
+     {spark-streaming}/{driver 2 Go, local[*], 3 requêtes, Java 17}/{4 Go}/{:4040 Spark UI}/orangeprojet,
+     {producer}/{50 tx/s, fraude toutes les 30--45 s}/{400 Mo}/{}/bleuprojet,
+     {dashboard}/{Streamlit, delta-rs, PyVis}/{900 Mo}/{:8501}/bleuprojet,
+     {kafka-ui}/{profil \fichier{tools}, optionnel}/{500 Mo}/{:8080}/grismoyen} {
+    \node[ct=\c] (c\i) at (\i*2.62,0) {{\ttfamily\bfseries\scriptsize \n}\\[2pt]\d\\[1pt]{\color{encre2}\p}};
+    \node[lim=\c, anchor=south east] at ($(c\i.north east)+(0,-0.02)$) {\m};
+  }
+  \node[draw=vertcode, fill=vertclair, line width=0.9pt, rounded corners=3pt,
+    minimum width=7.6cm, minimum height=0.75cm, font=\sffamily\scriptsize, align=center] (vol) at (10.48,-1.9)
+    {\ico{F1C0}~~\textbf{volume} \fichier{lakehouse} : tables Delta, checkpoints, \fichier{metrics/*.jsonl}};
+  \foreach \i in {3,4,5} \draw[{Stealth[length=1.6mm]}-{Stealth[length=1.6mm]}, line width=0.7pt, color=vertcode] (c\i.south) -- (c\i.south |- vol.north);
+  \node[font=\sffamily\tiny, color=encre2] at (10.48,-2.75) {une même image applicative pour les trois services Python};
+\end{tikzpicture}
+\caption[Déploiement Docker Compose]{Déploiement Docker Compose : services, limites mémoire et ports
+exposés.}
+\label{fig:docker}
+\end{figure}
+
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}>{\ttfamily}lcc>{\raggedright\arraybackslash}p{7.3cm}@{}}
+\toprule
+\multicolumn{1}{@{}l}{\sffamily\bfseries Topic} & \sffamily\bfseries Partitions & \sffamily\bfseries Rétention & \sffamily\bfseries Contenu\\
+\midrule
+transactions & 3 & 2~h & virements JSON au format de l'énoncé, clé = compte émetteur\\
+fraud-alerts & 3 & défaut & alertes de niveau $\geq$ MEDIUM : type, score, niveau, comptes, transactions, explication\\
+ground-truth & 1 & défaut & fraudes injectées : type, comptes, identifiants de transactions, heure d'injection\\
+\bottomrule
+\end{tabular}
+\caption{Topics Kafka.}
+\label{tab:topics}
+\end{table}

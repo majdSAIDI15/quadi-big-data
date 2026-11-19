@@ -1,0 +1,15 @@
+table                                   version     lignes
+bronze/transactions                         992     201934
+bronze/transactions_quarantine               66         74
+silver/account_metrics                       22       7770
+silver/traffic_windows                       69         92
+gold/fraud_alerts                           131        198
+gold/anomaly_subgraph_vertices              129        975
+gold/anomaly_subgraph_edges                 128        991
+
+[OK ] Transactions en double dans le bronze : 0
+[OK ] Transactions violant les contraintes métier : 0
+[OK ] Alertes en double dans le gold : 0
+[OK ] Sous-graphes sans alerte (orphelins) : 0
+
+201934 transactions, 198 alertes — intégrité vérifiée.

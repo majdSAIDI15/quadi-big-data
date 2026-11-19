@@ -1,0 +1,81 @@
+% ============================================================
+% INTRODUCTION GÉNÉRALE
+% ============================================================
+\chapter*{Introduction générale}
+\phantomsection\addcontentsline{toc}{chapter}{Introduction générale}
+\markboth{Introduction générale}{Introduction générale}
+
+Un virement de 450\,000~MAD d'une société A vers une société B n'a rien de
+suspect. Un virement de B vers C non plus, ni de C vers A. Les trois ensemble,
+en quatre minutes, avec une commission de 0,8\,\% prélevée à chaque étape,
+forment pourtant la signature d'une \textbf{fraude en carrousel}. Les systèmes
+anti-fraude classiques notent chaque transaction ou chaque compte isolément :
+par construction, ils ne voient pas une boucle. Pour la voir, il faut
+représenter les virements comme un \textbf{graphe} --- les comptes sont des
+sommets, les transactions des arêtes --- et chercher des formes dans ce graphe,
+pendant que l'argent circule encore.
+
+\begin{tcolorbox}[colback=bleuclair, colframe=bleuprojet, boxrule=0pt, leftrule=3pt,
+  arc=0pt, outer arc=0pt, left=8pt, right=8pt, top=6pt, bottom=6pt]
+{\sffamily\bfseries\color{bleuprojet}Problématique}\par\smallskip
+\emph{Comment détecter, en quelques secondes et sur un flux continu de
+virements, les structures de blanchiment qui n'existent qu'à l'échelle du
+réseau --- carrousels, cycles longs, comptes mules, dispersions-regroupements,
+comptes pivots --- tout en gardant une trace auditable de chaque alerte et
+une explication compréhensible par un analyste ?}
+\end{tcolorbox}
+
+L'énoncé du Mini-Projet~17 impose la chaîne technique : Kafka pour le flux,
+Spark Structured Streaming et GraphFrames pour l'analyse, Delta Lake pour
+l'historisation, Streamlit et PyVis pour la restitution. Le travail a consisté
+à la faire fonctionner \emph{de bout en bout}, à la \emph{mesurer} contre une
+vérité terrain, et à la rendre \emph{rapide} sur un simple ordinateur portable.
+La figure~\ref{fig:chiffres} résume ce qui a été obtenu.
+
+\begin{figure}[htp]
+\centering
+\tuile{bleuprojet}{99,0\,\%}{précision}{101 alertes vraies sur 102}\hfill
+\tuile{bleuprojet}{92,9\,\%}{rappel}{39 fraudes détectées sur 42}\hfill
+\tuile{orangeprojet}{3,9\,s}{détection d'un carrousel}{médiane, 8~s au maximum}\hfill
+\tuile{vertcode}{0}{doublon après panne}{\fichier{kill -9} de Spark en pleine ingestion}
+\caption[Les chiffres clés du projet]{Les chiffres clés, mesurés sur le run d'évaluation final
+(42~minutes, 50~transactions/s, une fraude toutes les 30~s) et lors du test de panne.}
+\label{fig:chiffres}
+\end{figure}
+
+Le rapport suit le trajet d'une transaction (figure~\ref{fig:plan}). Le
+chapitre~\ref{ch:contexte} cadre le sujet et le chapitre~\ref{ch:etatart}
+présente les typologies de blanchiment et les algorithmes de graphe. Le
+chapitre~\ref{ch:architecture} décrit l'architecture, le
+chapitre~\ref{ch:donnees} les données, le chapitre~\ref{ch:algorithmes} la
+détection et le chapitre~\ref{ch:lakehouse} le lakehouse. Le
+chapitre~\ref{ch:dashboard} montre le tableau de bord ; les
+chapitres~\ref{ch:performance} et~\ref{ch:resultats} mesurent les performances
+et la qualité de détection ; les deux derniers traitent des tests, des limites
+et du bilan. Presque toutes les figures de données sont tracées à partir des
+tables Delta et des journaux de métriques d'un même run réel
+(annexe~\ref{ann:reproductibilite}).
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  etape/.style={rounded corners=3pt, fill=#1, text=white, minimum height=9mm, text width=1.9cm,
+    align=center, font=\sffamily\scriptsize\bfseries},
+  chap/.style={font=\sffamily\tiny, color=encre2, align=center}]
+  \foreach \nom/\ch/\c [count=\i] in {
+     {Cadrer\\(sujet, état de l'art)}/{ch.~1--2}/grismoyen,
+     {Concevoir\\(architecture)}/{ch.~3}/bleuprojet,
+     {Générer\\(données)}/{ch.~4}/bleuprojet,
+     {Détecter\\(graphe)}/{ch.~5}/orangeprojet,
+     {Historiser\\(Delta Lake)}/{ch.~6}/bleuprojet,
+     {Restituer\\(dashboard)}/{ch.~7}/bleuprojet,
+     {Mesurer\\(perf., qualité)}/{ch.~8--10}/vertcode} {
+    \node[etape=\c] (n\i) at (\i*2.24,0) {\nom};
+    \node[chap, below=1mm of n\i] {\ch};
+  }
+  \foreach \a/\b in {1/2,2/3,3/4,4/5,5/6,6/7}
+    \draw[-{Stealth[length=1.6mm]}, line width=0.7pt, color=grismoyen] (n\a) -- (n\b);
+\end{tikzpicture}
+\caption{Organisation du rapport, calquée sur le trajet d'une transaction.}
+\label{fig:plan}
+\end{figure}

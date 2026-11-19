@@ -1,0 +1,384 @@
+% Rapport du Mini-Projet 17 — compiler depuis le dossier rapport/ avec :
+%   tectonic rapport.tex
+% Les graphiques de données (figures/*.pdf) se régénèrent avec :
+%   docker compose run ... dashboard python rapport/exporter_donnees.py   (données du lakehouse)
+%   py -3.10 rapport/generer_figures.py                                    (graphiques)
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[french]{babel}
+\usepackage{fontspec}
+% Open Sans (fournie avec TeX) pour les titres et les schémas : très proche de
+% Segoe UI, utilisée par les graphiques Matplotlib.
+\setsansfont{OpenSans}[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
+  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic, FontFace={sb}{n}{*-SemiBold}]
+\usepackage{geometry}
+\geometry{top=2.5cm,bottom=2.5cm,left=2.6cm,right=2.4cm,headheight=14pt}
+\usepackage[table]{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{multicol}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,decorations.pathreplacing,fit,backgrounds}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{newunicodechar}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{≈}{\ensuremath{\approx}}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,
+            citecolor=blue!50!black]{hyperref}
+
+% ------- Couleurs (mêmes que les graphiques Matplotlib) -------
+\definecolor{bleuprojet}{HTML}{2A78D6}
+\definecolor{bleuclair}{HTML}{DCEAFB}
+\definecolor{orangeprojet}{HTML}{EB6834}
+\definecolor{orangeclair}{HTML}{FCE3D8}
+\definecolor{grisclair}{HTML}{F4F4F1}
+\definecolor{grisligne}{HTML}{E1E0D9}
+\definecolor{grismoyen}{HTML}{A9A8A1}
+\definecolor{vertcode}{HTML}{2E7D5B}
+\definecolor{vertclair}{HTML}{DDF0E6}
+\definecolor{encre}{HTML}{0B0B0B}
+\definecolor{encre2}{HTML}{52514E}
+% palette catégorielle des typologies (ordre fixe, cf. fraud/viz.py)
+\definecolor{cat1}{HTML}{2A78D6}
+\definecolor{cat2}{HTML}{EB6834}
+\definecolor{cat3}{HTML}{1BAF7A}
+\definecolor{cat4}{HTML}{EDA100}
+\definecolor{cat5}{HTML}{E87BA4}
+\definecolor{cat6}{HTML}{008300}
+\definecolor{critique}{HTML}{D03B3B}
+
+% ------- Informations à personnaliser -------
+\newcommand{\etudiant}{Majd Saidi}
+\newcommand{\enseignant}{[Nom de l'enseignant]}
+\newcommand{\datesoutenance}{[Date de soutenance]}
+\newcommand{\anneeuniv}{2026--2027}
+
+% ------- Icônes (police Font Awesome 5 Free, fournie avec TeX) -------
+\DeclareFontFamily{TU}{iconesfa}{}
+\DeclareFontShape{TU}{iconesfa}{m}{n}{<-> \UnicodeFontFile{FontAwesome5Free-Solid-900.otf}{}}{}
+\newcommand{\ico}[1]{{\usefont{TU}{iconesfa}{m}{n}\symbol{"#1}}}
+\newcommand{\oui}{{\color{vertcode}\ico{F00C}}}
+\newcommand{\non}{{\color{orangeprojet}\ico{F00D}}}
+\newcommand{\partiel}{{\color{encre2}\ico{F042}}}
+
+% ------- Titres -------
+\titleformat{\chapter}[display]
+  {\sffamily\color{encre}}
+  {\fontseries{sb}\selectfont\large\color{bleuprojet}\chaptertitlename~\thechapter}
+  {1pt}{\bfseries\LARGE}[\vspace{2pt}{\color{bleuprojet}\titlerule[1pt]}]
+\titleformat{name=\chapter,numberless}[display]
+  {\sffamily\color{encre}}{}{0pt}{\bfseries\LARGE}
+  [\vspace{2pt}{\color{bleuprojet}\titlerule[1pt]}]
+\titlespacing*{\chapter}{0pt}{-14pt}{14pt}
+\titleformat{\section}{\sffamily\bfseries\large}{\color{bleuprojet}\thesection}{0.6em}{}
+\titlespacing*{\section}{0pt}{12pt plus 3pt minus 2pt}{5pt plus 1pt}
+\titleformat{\subsection}{\sffamily\bfseries}{\color{bleuprojet}\thesubsection}{0.6em}{}
+\titlespacing*{\subsection}{0pt}{9pt plus 2pt minus 2pt}{3pt plus 1pt}
+\renewcommand{\chaptermark}[1]{\markboth{\thechapter.\ #1}{}}
+
+% ------- En-têtes et pieds de page -------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\sffamily\color{encre2}\nouppercase{\leftmark}}
+\fancyhead[R]{\small\sffamily\thepage}
+\fancypagestyle{plain}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}
+  \fancyfoot[C]{\small\sffamily\thepage}}
+
+% ------- Légendes, flottants, listes -------
+\DeclareCaptionFont{bleu}{\color{bleuprojet}}
+\captionsetup{font=small, labelfont={bf,sf,bleu}, skip=5pt}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.7}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.8}
+\setlength{\textfloatsep}{12pt plus 3pt minus 3pt}
+\setlength{\floatsep}{10pt plus 3pt minus 2pt}
+\setlength{\intextsep}{10pt plus 3pt minus 2pt}
+\makeatletter
+\setlength{\@fptop}{0pt}
+\setlength{\@fpsep}{14pt}
+\setlength{\@fpbot}{0pt plus 1fil}
+\makeatother
+\setlist{itemsep=1pt, topsep=3pt}
+\setcounter{tocdepth}{1}
+\addto\captionsfrench{%
+  \renewcommand{\listfigurename}{Liste des figures}%
+  \renewcommand{\bibname}{Webographie}}
+\makeatletter
+\renewcommand\listoftables{\section*{\listtablename}\@starttoc{lot}}
+\makeatother
+
+% ------- Code -------
+\lstset{basicstyle=\ttfamily\footnotesize, breaklines=true, columns=fullflexible,
+  keepspaces=true, showstringspaces=false, frame=leftline, framesep=7pt,
+  rulecolor=\color{bleuprojet}, xleftmargin=14pt, extendedchars=true,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ê}{{\^e}}1 {ô}{{\^o}}1 {ç}{{\c{c}}}1
+           {≥}{{$\geq$}}1 {≤}{{$\leq$}}1 {→}{{$\to$}}1 {É}{{\'E}}1 {û}{{\^u}}1 {î}{{\^i}}1}
+
+% ------- Raccourcis -------
+\newcommand{\fichier}[1]{\texttt{#1}}
+\newcommand{\motcle}[1]{\textbf{#1}}
+\newcommand{\hl}[1]{{\setlength{\fboxsep}{1pt}\colorbox{orangeclair}{\strut#1}}}
+\newcommand{\nb}[1]{\textbf{#1}}
+
+% Encadré « à retenir »
+\newcommand{\aretenir}[2]{%
+  \begin{tcolorbox}[colback=grisclair, colframe=bleuprojet, boxrule=0pt, leftrule=3pt,
+    arc=0pt, outer arc=0pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+    before skip=8pt, after skip=8pt]
+  {\sffamily\bfseries\color{bleuprojet}#1}\par\smallskip #2
+  \end{tcolorbox}}
+% Encadré « leçon » (orange) : ce qui n'a pas marché et pourquoi
+\newcommand{\lecon}[2]{%
+  \begin{tcolorbox}[colback=orangeclair!45, colframe=orangeprojet, boxrule=0pt, leftrule=3pt,
+    arc=0pt, outer arc=0pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+    before skip=8pt, after skip=8pt]
+  {\sffamily\bfseries\color{orangeprojet}#1}\par\smallskip #2
+  \end{tcolorbox}}
+
+% Tuile de chiffre clé
+\newcommand{\tuile}[4]{% couleur, valeur, libellé, détail
+  \begin{tikzpicture}
+    \node[fill=#1!12, draw=#1, line width=0.8pt, rounded corners=3pt, minimum width=3.35cm,
+      minimum height=2.15cm, text width=3.1cm, align=center, inner sep=3pt] {%
+      {\sffamily\bfseries\fontsize{19}{22}\selectfont\color{#1}#2}\\[2pt]
+      {\sffamily\scriptsize\bfseries #3}\\[1pt]
+      {\sffamily\tiny\color{encre2}#4}};
+  \end{tikzpicture}}
+
+% ------- Styles des schémas -------
+\tikzset{
+  every node/.append style={execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
+  fleche/.style={-{Stealth[length=2.4mm]}, line width=0.9pt, color=encre2},
+  flechefine/.style={-{Stealth[length=1.8mm]}, line width=0.6pt, color=encre2},
+  carte/.style={draw=grisligne, fill=grisclair, rounded corners=3pt,
+    font=\sffamily\scriptsize, inner sep=4pt},
+  module/.style={draw=bleuprojet, line width=0.9pt, fill=white, rounded corners=3pt,
+    align=center, font=\sffamily\scriptsize, inner sep=3pt},
+  moduleo/.style={draw=orangeprojet, line width=0.9pt, fill=white, rounded corners=3pt,
+    align=center, font=\sffamily\scriptsize, inner sep=3pt},
+  fichierstyle/.style={draw=grismoyen, dashed, fill=grisclair, rounded corners=2pt,
+    align=center, font=\ttfamily\scriptsize, inner sep=3pt},
+  compte/.style={circle, fill=bleuprojet, text=white, minimum size=8mm, inner sep=0pt,
+    font=\sffamily\scriptsize\bfseries},
+  compteo/.style={circle, fill=orangeprojet, text=white, minimum size=8mm, inner sep=0pt,
+    font=\sffamily\scriptsize\bfseries},
+  compteg/.style={circle, fill=grismoyen, text=white, minimum size=6mm, inner sep=0pt,
+    font=\sffamily\tiny\bfseries},
+  virement/.style={-{Stealth[length=2.2mm]}, line width=1pt, color=encre2},
+  montant/.style={font=\sffamily\tiny, color=encre2, fill=white, inner sep=1pt},
+  topic/.style={cylinder, shape border rotate=90, aspect=0.22, draw=encre2, fill=grisclair,
+    minimum width=1.7cm, minimum height=1.0cm, font=\sffamily\scriptsize, align=center, inner sep=2pt},
+  table/.style={cylinder, shape border rotate=90, aspect=0.22, draw=#1, fill=#1!10, line width=0.8pt,
+    minimum width=2.3cm, minimum height=1.0cm, font=\sffamily\tiny, align=center, inner sep=2pt},
+}
+
+\begin{document}
+
+% ============================================================
+% PAGE DE GARDE
+% ============================================================
+\begin{titlepage}
+\sffamily
+\setlength{\parindent}{0pt}
+\begin{minipage}[c]{0.30\linewidth}
+  \includegraphics[width=4.2cm]{figures/logos/ensam_rabat.png}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.62\linewidth}\raggedleft
+  {École Nationale Supérieure d'Arts et Métiers de Rabat\par}
+  \vspace{1mm}{\small\color{encre2}Module Big Data --- Mini-Projet 17\par}
+\end{minipage}
+
+\vspace{2.2cm}
+{\color{bleuprojet}\rule{\linewidth}{1.2pt}}\par
+\vspace{7mm}
+\begin{center}
+  {\bfseries\fontsize{21}{28}\selectfont Graph Analytics \& Blanchiment d'argent\par}
+  \vspace{5mm}
+  {\large\color{encre2}Détection en flux de la fraude en carrousel et des boucles\\
+  de blanchiment avec Kafka, Spark Structured Streaming,\\ GraphFrames et Delta Lake\par}
+\end{center}
+\vspace{5mm}
+{\color{bleuprojet}\rule{\linewidth}{1.2pt}}\par
+\vspace{1.0cm}
+\begin{center}
+\begin{tikzpicture}[scale=1]
+  % le carrousel : trois sociétés, une boucle d'argent
+  \node[compte, minimum size=12mm, font=\sffamily\small\bfseries] (a) at (90:1.55) {A};
+  \node[compte, minimum size=12mm, font=\sffamily\small\bfseries] (b) at (-30:1.55) {B};
+  \node[compteo, minimum size=12mm, font=\sffamily\small\bfseries] (c) at (210:1.55) {C};
+  \draw[virement, line width=1.4pt, bend left=28] (a) to node[montant, font=\sffamily\scriptsize] {450\,000} (b);
+  \draw[virement, line width=1.4pt, bend left=28] (b) to node[montant, font=\sffamily\scriptsize] {446\,400} (c);
+  \draw[virement, line width=1.4pt, bend left=28] (c) to node[montant, font=\sffamily\scriptsize] {442\,800} (a);
+  \node[font=\sffamily\scriptsize, color=encre2] at (0,0) {4 min};
+  % la chaîne de traitement
+  \begin{scope}[xshift=3.6cm, yshift=-0.2cm]
+  \foreach \nom/\ic [count=\n] in {Produire/F362, Ingérer/F1C0, Détecter/F542, Historiser/F187, Explorer/F201} {
+    \node[circle, fill=bleuprojet, text=white, minimum size=11mm, font=\large] (e\n) at (\n*2.05-2.05,0) {\ico{\ic}};
+    \node[font=\sffamily\scriptsize, color=encre2, below=1.5mm of e\n] {\nom};
+  }
+  \foreach \a/\b in {1/2,2/3,3/4,4/5}
+    \draw[-{Stealth[length=2.4mm]}, line width=1.1pt, color=grismoyen] (e\a) -- (e\b);
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+\vspace{1.0cm}
+\begin{center}
+  {\large\bfseries Rapport de mini-projet --- Big Data \& Stream Processing\par}
+  \vspace{2mm}
+  {\color{encre2}Année universitaire \anneeuniv\par}
+\end{center}
+\vfill
+\begin{center}
+\begin{tabular}{rl}
+  \textbf{Réalisé par :} & \etudiant\\[2mm]
+  \textbf{Encadré par :} & \enseignant\\[2mm]
+  \textbf{Soutenu le :} & \datesoutenance\\
+\end{tabular}
+\end{center}
+\vspace{5mm}
+\end{titlepage}
+
+\pagenumbering{roman}
+
+% ============================================================
+% RÉSUMÉ
+% ============================================================
+\chapter*{Résumé}
+\phantomsection\addcontentsline{toc}{chapter}{Résumé}
+\markboth{Résumé}{Résumé}
+
+La fraude en carrousel et le blanchiment « en boucle » ont une signature commune :
+l'argent revient à son point de départ après avoir traversé plusieurs comptes.
+Cette signature n'est visible ni dans une transaction isolée ni dans un compte
+isolé, mais seulement dans la \textbf{forme du réseau}. Ce mini-projet a produit
+une \textbf{plateforme complète de détection en flux} : un générateur de virements
+réalistes injecte cinq typologies de fraude dans \textbf{Kafka} ; un job
+\textbf{Spark Structured Streaming} construit un graphe orienté glissant de
+10~minutes et l'analyse à deux vitesses avec \textbf{GraphFrames} (recherche de
+motifs, PageRank, composantes fortement connexes et Connected Components) ;
+chaque alerte, avec son sous-graphe et un score expliqué en français, est publiée
+dans Kafka et historisée dans un lakehouse \textbf{Delta Lake} partitionné par
+niveau de risque et par date ; un tableau de bord \textbf{Streamlit/PyVis} permet
+de l'explorer et d'injecter une fraude en direct.
+
+Mesurée contre la vérité terrain publiée par le générateur, sur un run de
+42~minutes à 50~transactions par seconde, la plateforme atteint une
+\textbf{précision de 99,0\,\%} et un \textbf{rappel de 92,9\,\%}, détecte un
+carrousel en \textbf{3,9~secondes} en médiane et ne produit \textbf{aucun doublon}
+après un arrêt brutal de Spark. La performance n'allait pas de soi : la première
+version mettait 97~secondes par micro-batch ; six versions mesurées l'ont ramenée
+à 3,4~secondes.
+
+\vspace{2mm}
+\noindent\textbf{Mots-clés :} fraude en carrousel, blanchiment d'argent, graph
+analytics, motif finding, PageRank, composantes connexes, Spark Structured
+Streaming, GraphFrames, Kafka, Delta Lake, lakehouse, temps réel.
+
+\vspace{6mm}
+\noindent{\color{grisligne}\rule{\linewidth}{0.6pt}}
+\vspace{2mm}
+
+\begin{otherlanguage}{english}
+\noindent{\sffamily\bfseries\Large Abstract}
+
+\vspace{3mm}
+\noindent Carousel fraud and loop-based money laundering share one signature:
+money returns to its origin after passing through several accounts. That
+signature is invisible in any single transaction or account and only appears in
+the \emph{shape} of the network. This project delivers a complete streaming
+detection platform: a generator publishes realistic transfers and five fraud
+typologies to Kafka; a Spark Structured Streaming job maintains a 10-minute
+sliding directed graph and analyses it at two speeds with GraphFrames (motif
+finding, PageRank, strongly and weakly connected components); every alert, with
+its subgraph and a plain-language explanation, is published to Kafka and stored
+in a Delta Lake lakehouse partitioned by risk level and date; a Streamlit/PyVis
+dashboard lets analysts explore alerts and inject frauds live.
+
+\smallskip
+\noindent Measured against the generator's ground truth over a 42-minute run at
+50 transactions per second, the platform reaches 99.0\,\% precision and
+92.9\,\% recall, detects a carousel in 3.9 seconds (median) and produces no
+duplicate after a hard kill of Spark. Six measured iterations brought the
+micro-batch time from 97 seconds down to 3.4 seconds.
+
+\vspace{2mm}
+\noindent\textbf{Keywords:} carousel fraud, money laundering, graph analytics,
+motif finding, PageRank, connected components, Spark Structured Streaming,
+GraphFrames, Kafka, Delta Lake, real time.
+\end{otherlanguage}
+
+% ============================================================
+% TABLES
+% ============================================================
+\tableofcontents
+\clearpage\phantomsection\addcontentsline{toc}{chapter}{Liste des figures et des tableaux}
+\listoffigures
+\listoftables
+
+% ============================================================
+% GLOSSAIRE
+% ============================================================
+\section*{Glossaire et abréviations}
+\phantomsection\addcontentsline{toc}{chapter}{Glossaire et abréviations}
+\markboth{Glossaire et abréviations}{Glossaire et abréviations}
+
+\begin{multicols}{2}
+\small
+\begin{description}[leftmargin=0pt, itemsep=3pt, font=\sffamily\bfseries]
+\item[ANRF] Autorité Nationale du Renseignement Financier (Maroc), cellule de renseignement financier.
+\item[Arrow] Format de données en colonnes, utilisé pour passer des données de Python à Spark sans conversion ligne à ligne.
+\item[Bronze / silver / gold] Couches d'un lakehouse « médaillon » : brut, consolidé, métier.
+\item[Carrousel] Fraude où l'argent (ou la marchandise) circule en boucle entre sociétés complices.
+\item[Checkpoint] Sauvegarde de la progression d'une requête de streaming, pour reprendre après une panne.
+\item[CC] \emph{Connected Components} : groupes de comptes reliés, sans tenir compte du sens des virements.
+\item[Delta Lake] Format de tables transactionnelles (ACID) sur fichiers Parquet.
+\item[Exactly-once] Garantie qu'un événement produit son effet une fois et une seule, même après une panne.
+\item[GAFI] Groupe d'Action Financière, organisme intergouvernemental de lutte contre le blanchiment.
+\item[GraphFrames] Bibliothèque de graphes de Spark, fondée sur les DataFrames.
+\item[Kafka] Journal distribué de messages ; les producteurs écrivent dans des \emph{topics}.
+\item[KRaft] Mode de Kafka sans ZooKeeper.
+\item[Micro-batch] Petit lot de données traité à chaque déclenchement d'une requête de streaming.
+\item[Motif] Patron de sous-graphe recherché, par exemple \fichier{(a)->(b)->(c)->(a)}.
+\item[Mule] Compte qui reçoit des fonds de nombreux émetteurs et les reverse aussitôt.
+\item[PageRank] Mesure de l'importance d'un sommet d'après les sommets qui pointent vers lui.
+\item[Pivot] Compte commun à plusieurs schémas frauduleux.
+\item[Précision] Part des alertes émises qui correspondent à une vraie fraude.
+\item[Rappel] Part des fraudes injectées qui ont été détectées.
+\item[Scatter-gather] Fonds dispersés vers des intermédiaires puis regroupés vers une même destination.
+\item[SCC] \emph{Strongly Connected Components} : groupes où chaque compte peut atteindre tous les autres en suivant le sens des virements.
+\item[Smurfing] Fractionnement d'une somme en nombreux petits dépôts.
+\item[Watermark] Retard maximal toléré sur un événement avant qu'il soit ignoré.
+\end{description}
+\end{multicols}
+
+\cleardoublepage
+\pagenumbering{arabic}
+
+\input{chapitres/introduction}
+\input{chapitres/ch1_contexte}
+\input{chapitres/ch2_etat_art}
+\input{chapitres/ch3_architecture}
+\input{chapitres/ch4_donnees}
+\input{chapitres/ch5_algorithmes}
+\input{chapitres/ch6_lakehouse}
+\input{chapitres/ch7_dashboard}
+\input{chapitres/ch8_performance}
+\input{chapitres/ch9_resultats}
+\input{chapitres/ch10_qualite}
+\input{chapitres/ch11_bilan}
+\input{chapitres/conclusion}
+\input{chapitres/annexes}
+
+\end{document}

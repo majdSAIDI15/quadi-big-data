@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- Pools FAIR : le chemin rapide (alertes) garde la priorité sur les analyses lourdes. -->
+<allocations>
+  <pool name="fast">
+    <schedulingMode>FIFO</schedulingMode>
+    <weight>4</weight>
+    <minShare>2</minShare>
+  </pool>
+  <pool name="ops">
+    <schedulingMode>FIFO</schedulingMode>
+    <weight>1</weight>
+    <minShare>0</minShare>
+  </pool>
+  <pool name="slow">
+    <schedulingMode>FIFO</schedulingMode>
+    <weight>1</weight>
+    <minShare>1</minShare>
+  </pool>
+</allocations>

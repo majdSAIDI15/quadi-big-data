@@ -1,0 +1,115 @@
+name: fraud-graph
+
+x-env: &env
+  KAFKA_BOOTSTRAP: kafka:9092
+  LAKEHOUSE_DIR: /data/lakehouse
+  CHECKPOINT_DIR: /data/checkpoints
+  METRICS_DIR: /data/metrics
+  TZ: UTC
+
+x-app: &app
+  image: fraud-graph-app:latest
+  build: .
+  volumes:
+    - lakehouse:/data
+  depends_on:
+    kafka-init:
+      condition: service_completed_successfully
+
+services:
+  kafka:
+    image: apache/kafka:4.2.2
+    hostname: kafka
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 90s
+      start_interval: 3s
+    mem_limit: 900m
+
+  kafka-init:
+    image: apache/kafka:4.2.2
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        T=/opt/kafka/bin/kafka-topics.sh
+        $$T --bootstrap-server kafka:9092 --create --if-not-exists --topic transactions --partitions 3 --replication-factor 1 --config retention.ms=7200000
+        $$T --bootstrap-server kafka:9092 --create --if-not-exists --topic fraud-alerts --partitions 3 --replication-factor 1
+        $$T --bootstrap-server kafka:9092 --create --if-not-exists --topic ground-truth --partitions 1 --replication-factor 1
+        $$T --bootstrap-server kafka:9092 --list
+
+  spark-streaming:
+    <<: *app
+    container_name: fraud-spark
+    command: ["python", "spark_graph_fraud_streaming.py"]
+    environment:
+      <<: *env
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-2g}
+      SPARK_MASTER: ${SPARK_MASTER:-local[*]}
+      MALLOC_ARENA_MAX: "2"   # limite la fragmentation mémoire native de la JVM en conteneur
+    ports:
+      - "4040:4040"   # Spark UI
+    restart: on-failure
+    mem_limit: 4g
+
+  producer:
+    <<: *app
+    container_name: fraud-producer
+    command: ["sh", "-c", "python financial_graph_producer.py --rate ${RATE:-50} --fraud-every ${FRAUD_EVERY:-45} --first-fraud-after ${FIRST_FRAUD_AFTER:-60}"]
+    environment:
+      <<: *env
+    restart: unless-stopped
+    mem_limit: 400m
+
+  dashboard:
+    <<: *app
+    container_name: fraud-dashboard
+    command: ["streamlit", "run", "graph_network_dashboard.py", "--server.port=8501", "--server.address=0.0.0.0",
+              "--server.headless=true", "--browser.gatherUsageStats=false"]
+    environment:
+      <<: *env
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    mem_limit: 900m
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    profiles: ["tools"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: fraud-graph
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      JAVA_OPTS: "-Xmx256m"
+    ports:
+      - "8080:8080"
+    mem_limit: 500m
+
+volumes:
+  lakehouse:

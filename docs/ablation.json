@@ -1,0 +1,26 @@
+[
+  {
+    "etape": "Motif seul (a)->(b)->(c)->(a)",
+    "aretes_analysees": 90323,
+    "cycles": 233,
+    "vrais": 68,
+    "precision": 0.2918,
+    "carrousels_retrouves": 36
+  },
+  {
+    "etape": "+ ordre temporel et durée ≤ 10 min",
+    "aretes_analysees": 90323,
+    "cycles": 91,
+    "vrais": 68,
+    "precision": 0.7473,
+    "carrousels_retrouves": 36
+  },
+  {
+    "etape": "+ score ≥ MEDIUM (montants, vitesse…)",
+    "aretes_analysees": 90323,
+    "cycles": 69,
+    "vrais": 68,
+    "precision": 0.9855,
+    "carrousels_retrouves": 36
+  }
+]

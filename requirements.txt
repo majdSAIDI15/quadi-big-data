@@ -1,0 +1,22 @@
+# Traitement distribué
+pyspark==3.5.7
+delta-spark==3.3.2
+graphframes-py==0.12.3
+
+# Messagerie
+confluent-kafka==2.12.2
+
+# Dashboard & lecture du lakehouse sans JVM
+streamlit==1.50.0
+pyvis==0.3.2
+plotly==6.3.0
+deltalake==1.1.4
+pandas==2.2.3
+pyarrow==20.0.0
+networkx==3.4.2
+fpdf2==2.8.4
+
+# Évaluation & qualité
+matplotlib==3.10.6
+pytest==8.4.2
+ruff==0.13.3

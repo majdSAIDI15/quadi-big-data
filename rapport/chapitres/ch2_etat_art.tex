@@ -1,0 +1,189 @@
+% ============================================================
+% CHAPITRE 2
+% ============================================================
+\chapter{Blanchiment et analyse de graphes : état de l'art}
+\label{ch:etatart}
+
+\section{Les trois temps du blanchiment}
+Le blanchiment consiste à donner une origine apparemment licite à des fonds
+qui n'en ont pas. On le décrit classiquement en trois étapes
+(figure~\ref{fig:etapes}). Les typologies visées par ce projet se situent
+surtout dans la deuxième, l'\emph{empilement} : multiplier les transferts
+pour brouiller la trace. C'est précisément l'étape qui laisse une empreinte
+dans la \emph{structure} du réseau de virements.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  etape/.style={rounded corners=3pt, minimum height=1.1cm, text width=4.3cm, align=center,
+    font=\sffamily\small\bfseries, text=white, fill=#1},
+  detail/.style={font=\sffamily\scriptsize, text width=4.3cm, align=left, anchor=north},
+  typo/.style={rounded corners=2pt, fill=#1!15, draw=#1, font=\sffamily\tiny\bfseries, inner sep=2.5pt}]
+  \node[etape=grismoyen] (p) at (0,0) {1 · Placement};
+  \node[etape=orangeprojet] (e) at (5.2,0) {2 · Empilement (\emph{layering})};
+  \node[etape=bleuprojet] (i) at (10.4,0) {3 · Intégration};
+  \draw[fleche] (p) -- (e);
+  \draw[fleche] (e) -- (i);
+  \node[detail] at (0,-0.75) {Faire entrer l'argent dans le système financier, en petites sommes pour
+    rester sous les seuils de déclaration.};
+  \node[detail] at (5.2,-0.75) {Multiplier les virements entre comptes et sociétés écrans, faire
+    tourner l'argent, le fractionner puis le regrouper.};
+  \node[detail] at (10.4,-0.75) {Réinjecter les fonds dans l'économie légale : achats, investissements,
+    factures de complaisance.};
+  \node[typo=cat5] at (0,-2.65) {mules (smurfing)};
+  \node[typo=cat1] at (3.75,-2.65) {carrousel};
+  \node[typo=cat3] at (5.25,-2.65) {cycle long};
+  \node[typo=cat4] at (6.95,-2.65) {scatter-gather};
+  \node[typo=cat2] at (4.45,-3.15) {pivot};
+  \node[typo=cat6] at (6.05,-3.15) {réseau lié};
+  \node[font=\sffamily\tiny, color=encre2] at (10.4,-2.65) {hors du périmètre du flux de virements};
+  \node[font=\sffamily\tiny\bfseries, color=encre2, anchor=east] at (-2.3,-2.9) {alertes :};
+\end{tikzpicture}
+\caption[Les trois étapes du blanchiment et les typologies détectées]{Les trois étapes du blanchiment
+et la place des six types d'alertes produits par la plateforme.}
+\label{fig:etapes}
+\end{figure}
+
+\section{Cinq typologies, cinq formes de graphe}
+Les typologies simulées reprennent celles du jeu de données synthétique
+d'IBM pour l'anti-blanchiment~\cite{ibmaml} (\emph{fan-in}, cycle,
+\emph{scatter-gather}), auxquelles s'ajoute le compte pivot qui relie
+plusieurs carrousels. La figure~\ref{fig:typologies} les dessine telles que le
+producteur les injecte ; chacune appelle un algorithme de graphe différent.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[
+  v/.style={circle, fill=#1, minimum size=4.6mm, inner sep=0pt},
+  e/.style={-{Stealth[length=1.5mm]}, line width=0.7pt, color=encre2},
+  titre/.style={font=\sffamily\scriptsize\bfseries, anchor=north},
+  sous/.style={font=\sffamily\tiny, color=encre2, align=center, text width=2.7cm, anchor=north}]
+  % 1. carrousel
+  \begin{scope}[xshift=0cm]
+    \node[v=cat1] (a) at (90:0.75) {}; \node[v=cat1] (b) at (-30:0.75) {}; \node[v=cat1] (c) at (210:0.75) {};
+    \draw[e, bend left=20] (a) to (b); \draw[e, bend left=20] (b) to (c); \draw[e, bend left=20] (c) to (a);
+    \node[titre] at (0,-1.05) {Carrousel};
+    \node[sous] at (0,-1.4) {3 sociétés, 40--250\,k MAD, $-$1 à 3\,\%/étape, 1--3 min\\[2pt]\textbf{motif à 3 arêtes}};
+  \end{scope}
+  % 2. cycle long
+  \begin{scope}[xshift=3.15cm]
+    \foreach \k in {0,...,4} \node[v=cat3] (n\k) at (90+\k*72:0.78) {};
+    \foreach \k [evaluate=\k as \j using {int(mod(\k+1,5))}] in {0,...,4} \draw[e] (n\k) -- (n\j);
+    \node[titre] at (0,-1.05) {Cycle long};
+    \node[sous] at (0,-1.4) {4 ou 5 comptes, même signature que le carrousel\\[2pt]\textbf{SCC + motif à 4--5 arêtes}};
+  \end{scope}
+  % 3. mule
+  \begin{scope}[xshift=6.3cm]
+    \node[v=cat5, minimum size=6mm] (m) at (0,0) {};
+    \foreach \k in {0,...,7} { \node[v=grismoyen, minimum size=3.2mm] (s\k) at (100+\k*22:0.95) {}; \draw[e] (s\k) -- (m); }
+    \node[v=grismoyen, minimum size=3.6mm] (bf) at (-30:0.95) {};
+    \draw[e, line width=1.4pt, color=cat5] (m) -- (bf);
+    \node[titre] at (0,-1.05) {Compte mule};
+    \node[sous] at (0,-1.4) {8--14 dépôts de 2--10\,k MAD, puis un retrait de 90--97\,\%\\[2pt]\textbf{vélocité + flux traversant}};
+  \end{scope}
+  % 4. scatter-gather
+  \begin{scope}[xshift=9.45cm]
+    \node[v=cat4] (s) at (-0.95,0) {}; \node[v=cat4] (t) at (0.95,0) {};
+    \foreach \k in {-2,...,2} { \node[v=grismoyen, minimum size=3.6mm] (m\k) at (0,\k*0.33) {};
+      \draw[e] (s) -- (m\k); \draw[e] (m\k) -- (t); }
+    \node[titre] at (0,-1.05) {Scatter-gather};
+    \node[sous] at (0,-1.4) {4--6 intermédiaires, parts égales, 97--99\,\% reversés\\[2pt]\textbf{motif à 2 sauts}};
+  \end{scope}
+  % 5. pivot
+  \begin{scope}[xshift=12.6cm]
+    \node[v=cat2, minimum size=6mm] (p) at (0,0) {};
+    \foreach \k in {0,1,2} {
+      \node[v=grismoyen, minimum size=3.6mm] (x\k) at (60+\k*120:0.95) {};
+      \node[v=grismoyen, minimum size=3.6mm] (y\k) at (100+\k*120:0.95) {};
+      \draw[e] (p) -- (x\k); \draw[e] (x\k) -- (y\k); \draw[e] (y\k) -- (p); }
+    \node[titre] at (0,-1.05) {Pivot};
+    \node[sous] at (0,-1.4) {1 compte au centre de 3 carrousels imbriqués\\[2pt]\textbf{cycles + PageRank, puis CC}};
+  \end{scope}
+\end{tikzpicture}
+\caption[Les cinq typologies injectées et leur forme dans le graphe]{Les cinq typologies injectées,
+leurs paramètres de génération et l'algorithme qui les détecte (en gras).}
+\label{fig:typologies}
+\end{figure}
+
+\section{Les algorithmes de graphe mobilisés}
+Le tableau~\ref{tab:algos} résume ce que chaque algorithme sait dire d'un
+graphe de virements, et ce qu'il coûte. Le point clé est l'ordre de grandeur :
+la recherche de motif est une suite de jointures dont le coût explose avec la
+taille du graphe ; PageRank et les composantes sont itératifs et ne
+s'exécutent raisonnablement que sur un graphe réduit. Toute l'architecture du
+chapitre suivant découle de ce constat.
+
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.7cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{3.7cm}>{\raggedright\arraybackslash}p{3.3cm}@{}}
+\toprule
+\sffamily\bfseries Algorithme & \sffamily\bfseries Question posée & \sffamily\bfseries Coût & \sffamily\bfseries Usage ici\\
+\midrule
+Motif finding & Existe-t-il un sous-graphe de cette forme ? & 1 jointure par arête du motif ; explose avec le degré des hubs & carrousels (rapide), scatter-gather, cycles 4--5\\
+PageRank & Quels comptes concentrent les flux ? & itératif (10 tours ici) & comptes pivots\\
+SCC & Quels comptes peuvent tous s'atteindre en suivant le sens des virements ? & itératif ; inutile hors d'un noyau élagué & cycles longs\\
+Connected Components & Quels comptes sont reliés, quel que soit le sens ? & itératif & réseaux d'alertes liées\\
+Degré, vélocité & Combien de dépôts, à quel rythme ? & linéaire & comptes mules\\
+\bottomrule
+\end{tabular}
+\caption{Algorithmes de graphe utilisés, coût et usage.}
+\label{tab:algos}
+\end{table}
+
+\section{Approches de détection}
+Les dispositifs bancaires reposent historiquement sur des règles par
+transaction (seuils, listes) puis sur des modèles d'apprentissage notant
+chaque transaction ou chaque client. Aucune de ces deux familles ne voit une
+boucle : elle n'est la propriété d'aucun élément isolé. Les analyses de
+graphe la voient, mais sont souvent conduites en différé, sur des
+historiques. Le projet se place dans la quatrième case du
+tableau~\ref{tab:approches} : l'analyse de graphe \emph{en flux}.
+
+\begin{table}[htp]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.0cm}cccc@{}}
+\toprule
+& \sffamily\bfseries Règles & \sffamily\bfseries ML tabulaire & \sffamily\bfseries Graphe (différé) & \sffamily\bfseries Graphe en flux\\
+\midrule
+Voit les boucles et les réseaux & \non & \non & \oui & \oui\\
+Alerte pendant que l'argent circule & \oui & \oui & \non & \oui\\
+Explication lisible par un analyste & \oui & \partiel & \partiel & \oui\\
+Se passe de données étiquetées & \oui & \non & \oui & \oui\\
+Simplicité de mise en œuvre & \oui & \partiel & \partiel & \non\\
+\bottomrule
+\end{tabular}
+\caption[Positionnement parmi les approches de détection]{Positionnement parmi les approches de
+détection (\oui~oui, \partiel~en partie, \non~non). Le prix de la dernière colonne est la complexité
+technique, objet des chapitres~\ref{ch:architecture} et~\ref{ch:performance}.}
+\label{tab:approches}
+\end{table}
+
+\section{Cadre marocain}
+Au Maroc, la lutte contre le blanchiment repose sur la loi n\up{o}\,43-05,
+renforcée par la loi n\up{o}\,12-18 qui a notamment institué l'Autorité
+Nationale du Renseignement Financier (ANRF), destinataire des déclarations de
+soupçon des banques~\cite{anrf}. Le pays a été retiré en 2023 de la liste des
+juridictions sous surveillance renforcée du GAFI~\cite{gafi}. Pour une banque,
+l'enjeu est double : déclarer vite, et pouvoir justifier chaque déclaration.
+C'est ce que vise la plateforme en associant à chaque alerte un score
+\emph{expliqué}, son sous-graphe et un historique non modifiable.
+
+\begin{figure}[htp]
+\centering
+\begin{tikzpicture}[x=1.1cm]
+  \draw[grismoyen, line width=0.8pt] (0,0) -- (11.6,0);
+  \foreach \x/\an/\txt/\c in {
+     0.9/2007/{Loi 43-05 : incrimination du blanchiment, obligations de vigilance}/bleuprojet,
+     4.0/2009/{Cellule de renseignement financier opérationnelle}/grismoyen,
+     7.2/2021/{Loi 12-18 : renforcement, création de l'ANRF}/bleuprojet,
+     10.3/2023/{Sortie de la liste grise du GAFI}/vertcode} {
+    \fill[\c] (\x,0) circle (1.4mm);
+    \node[font=\sffamily\small\bfseries, color=\c, anchor=south] at (\x,0.15) {\an};
+    \node[font=\sffamily\tiny, text width=2.9cm, align=center, anchor=north] at (\x,-0.2) {\txt};
+  }
+  \node[font=\sffamily\tiny\bfseries, color=orangeprojet, anchor=west, text width=2.1cm] at (11.8,0.0)
+    {ce projet : détecter et documenter en temps réel};
+\end{tikzpicture}
+\caption{Repères du cadre marocain de lutte contre le blanchiment.}
+\label{fig:cadre}
+\end{figure}
